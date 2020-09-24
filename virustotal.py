@@ -3,6 +3,8 @@ import os
 import json
 import time
 import random
+import re
+from tqdm import tqdm
 
 API_KEY = "defb5a6313cd911f06612f2fceed1ee5e6077e8e21ad2e80ef08987e5eaeceba"
 sample_path = "../malware_sample/sha1/"
@@ -26,7 +28,7 @@ def request_vt(url):
     return result
 
 
-def download_by_id():
+def download_by_fail_report_id():
     null = "NULL"
     index = 1
     reportid_path = "./analyses/"
@@ -56,18 +58,23 @@ def submite_file():
     files = os.walk(sample_path)
     save_path = "./name_id.json"
     null = "NULL"
+    index = 1
     for path, dir_list , file_list in files :
-        for file_name in file_list:
+        for file_name in tqdm(file_list):
+            if index < 1545:
+                index+=1
+                continue
             file_path = os.path.join(path,file_name)
-            print(file_name)
-            print(name_id)
+            # print(file_name)
+            # print(name_id)
             with open(file_path,'rb') as f :
                 file_data = f.read()
                 id_result = http.request(method = "POST", url = "https://www.virustotal.com/api/v3/files",headers = {'x-apikey': API_KEY,"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.135 Safari/537.36"}, fields = {'file':( file_name,file_data)})
                 id = eval(id_result.data.decode("UTF-8"))["data"]["id"]
                 name_id[file_name] = id
                 sotre_json(save_path,name_id)
-            time.sleep(random.randint(15,35))
+            print(name_id)
+            time.sleep(1)
 
 def get_file():
     files = os.walk(sample_path)
@@ -75,8 +82,12 @@ def get_file():
     #save_path = "./analyses/{}.json"
     save_path = "./report/{}.json"
     null = "Null"
+    index = 0
     for path, dir_list , file_list in files :
         for file_name in file_list:
+            if index<1544:
+                index+=1
+                continue
             file_path = os.path.join(path,file_name)
             print(file_name)
             with open(file_path,'rb') as f :
@@ -113,29 +124,88 @@ def get_file():
 
 
 def check_result():
+    write_path = "./label/"
     files = os.walk(analyses_path)
-    for path,dir_list, file_list in files:
-        for file_name in file_list:
+    # os.listdir
+    # print(files)
+    # while 1:
+    #     print(next(files))
+    # path, dir_list, file_list = next(files)
+
+    for path, dir_list, file_list in files:
+        for file_name in tqdm(file_list):
             file_path = os.path.join(path,file_name)
             data = load_json(file_path)
             label = data["data"]['attributes']["results"]
-            print(label)
+            #print(label)
             AV_result = []
             split_result = []
             frequence = dict()
+            #print(frequence)
             for key in label:
                 AV_result.append(label[key])
             for AV in  AV_result:
-                temp = AV.split(".")
+                if AV["result"] == "NULL":
+                    continue
+                # print(AV['result'])
+                temp = re.split(r"[.:/]",str(AV["result"])) #:-_!
                 print(temp)
-                for key in temp:
-                    if key in frequence:
-                        frequence[key] += 1
+                for result_word in temp:
+                    if result_word in frequence:
+                        frequence[result_word] += 1
                     else:
-                        frequence[key] = 1
-            print(frequence)
-            break
+                        frequence[result_word] = 1
+                    #print(frequence)
+            #print(frequence)
+            label_set = set()
+            print([ v for v in sorted(frequence.values())])
+            frequence_sort = [ v for v in sorted(frequence.values())]
+            for i in frequence_sort[-7:-1]:
+                for key in frequence:
+                    if frequence[key] == i :
+                        label_set.add(key)
+            with open(os.path.join(write_path,file_name),'wb') as f :
+                f.write(str.encode(str(label_set)))
             
+            
+def get_analysis_report():
+    null = "NULL"
+    analyses_url = "https://www.virustotal.com/api/v3/analyses/{}"
+    save_path_form = "./old_report/{}.json"
+    hash_id = load_json("./name_id.json")
+    error_list = []
+    for key in tqdm(hash_id):
+        url = analyses_url.format(str(hash_id[key]))
+        result = request_vt(url)
+        if result.status == 200:
+            save_file_path = save_path_form.format(str(key))
+            result_data = eval(result.data.decode("UTF-8"))
+            sotre_json(save_file_path,result_data)
+        else:
+            error_list.append(key)
+        time.sleep(1)
+    print(error_list)  
+            
+
+def statistics():
+    label_path = "./label/"
+    files = os.walk(label_path)
+    label_stastic = dict()
+    for path , dir_list, file_list in files:
+        for file_name in file_list:
+            file_path = os.path.join(path,file_name)
+            with open (file_path,"rb") as f :
+                for line in f :
+                    label_set = eval(line.decode("UTF-8"))
+                    for label in label_set:
+                        if label in label_stastic:
+                            label_stastic[label] += 1 
+                        else :
+                            label_stastic[label] = 1
+        data = sorted(label_stastic.items(),key=lambda item:item[1])
+        sotre_json("./stastic.json",data)
+
+
 
 def test():
     #url = "https://www.virustotal.com/api/v3/analyses/ZTFkM2ZkYWNiM2QzZjNhMDRiYjc0MTM3ZDAxNDhlZTc6MTU5OTU1NDI5MA=="
@@ -144,10 +214,12 @@ def test():
     print(result.data.decode("UTF-8"))
 
 if __name__ == "__main__":
-    #get_file()
+    # get_file()
     #test()
     # check_result()
-    download_by_id()
+    #download_by_id()
     # null = "Null"
     # sotre_json('./test2.json',eval(request_vt("https://www.virustotal.com/api/v3/analyses/MjdhZDU5NzE5MzNkNTE0YzNhMGU5MGZlMmEwZjAzODk6MTU5OTgxMjQ0OA==")))
     #submite_file()
+    # get_analysis_report()
+    statistics()
