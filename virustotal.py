@@ -21,13 +21,18 @@ def load_json(path):
 def sotre_json(path,data):
     with open (path,'w') as f :
         json.dump(data,f)
-
+'''
+发起请求
+'''
 def request_vt(url):
     result = http.request(method = "GET", url = url, headers = {'x-apikey': API_KEY})
     #return result.data.decode("UTF-8")
     return result
 
-
+'''
+之前没有考虑到是提交之后现场分析，下载的报告中结果都是空
+所以对这些报告进行重新下载
+'''
 def download_by_fail_report_id():
     null = "NULL"
     index = 1
@@ -52,7 +57,9 @@ def download_by_fail_report_id():
 
 
 
-
+'''
+提交文件，用于分析，id和文件名键值对存储在name_id.json中。将提交文件与获取报告分开，获取报告函数为get_analysis_report
+'''
 def submite_file():
     name_id = dict()
     files = os.walk(sample_path)
@@ -75,7 +82,9 @@ def submite_file():
                 sotre_json(save_path,name_id)
             print(name_id)
             time.sleep(1)
-
+'''
+一边提交一边等待分析结束获取报告（已弃用）
+'''
 def get_file():
     files = os.walk(sample_path)
     analyses_url = "https://www.virustotal.com/api/v3/analyses/{}"
@@ -122,7 +131,32 @@ def get_file():
             f.close()
             time.sleep(random.randint(20,40))
 
+      
+'''
+根据提交之后获得的id来下载对应的分析报告（将提交文件与下载报告分开）提交报告为submit_file
+'''            
+def get_analysis_report():
+    null = "NULL"
+    analyses_url = "https://www.virustotal.com/api/v3/analyses/{}"
+    save_path_form = "./old_report/{}.json"
+    hash_id = load_json("./name_id.json")
+    error_list = []
+    for key in tqdm(hash_id):
+        url = analyses_url.format(str(hash_id[key]))
+        result = request_vt(url)
+        if result.status == 200:
+            save_file_path = save_path_form.format(str(key))
+            result_data = eval(result.data.decode("UTF-8"))
+            sotre_json(save_file_path,result_data)
+        else:
+            error_list.append(key)
+        time.sleep(1)
+    print(error_list)  
 
+
+'''
+切割报告中的各个引擎的分析结果，提取其中词频最高的7个作为结果写入到json中
+'''
 def check_result():
     write_path = "./label/"
     files = os.walk(analyses_path)
@@ -166,27 +200,11 @@ def check_result():
                         label_set.add(key)
             with open(os.path.join(write_path,file_name),'wb') as f :
                 f.write(str.encode(str(label_set)))
-            
-            
-def get_analysis_report():
-    null = "NULL"
-    analyses_url = "https://www.virustotal.com/api/v3/analyses/{}"
-    save_path_form = "./old_report/{}.json"
-    hash_id = load_json("./name_id.json")
-    error_list = []
-    for key in tqdm(hash_id):
-        url = analyses_url.format(str(hash_id[key]))
-        result = request_vt(url)
-        if result.status == 200:
-            save_file_path = save_path_form.format(str(key))
-            result_data = eval(result.data.decode("UTF-8"))
-            sotre_json(save_file_path,result_data)
-        else:
-            error_list.append(key)
-        time.sleep(1)
-    print(error_list)  
-            
+      
 
+'''
+统计所有文件的词频
+'''
 def statistics():
     label_path = "./label/"
     files = os.walk(label_path)
@@ -206,7 +224,15 @@ def statistics():
         sotre_json("./stastic.json",data)
 
 
+'''
+爬取沙箱报告信息
+'''
+def get_sandbox_report():
+    os.walk("./")
 
+'''
+测试
+'''
 def test():
     #url = "https://www.virustotal.com/api/v3/analyses/ZTFkM2ZkYWNiM2QzZjNhMDRiYjc0MTM3ZDAxNDhlZTc6MTU5OTU1NDI5MA=="
     url = "https://www.virustotal.com/api/v3/sigma_analyses/ZTFkM2ZkYWNiM2QzZjNhMDRiYjc0MTM3ZDAxNDhlZTc6MTU5OTU1NDI5MA=="
